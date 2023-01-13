@@ -1,13 +1,15 @@
 import tensorflow as tf
 import os
 import numpy as np
+import cv2
+from osgeo import gdal
 
 class MDN(tf.keras.Model):
   def __init__(self):
     super(MDN, self).__init__()
     self.conv1 = tf.keras.layers.Conv2D(32, kernel_size= (3, 3), activation='relu')
     self.conv2 = tf.keras.layers.Conv2D(64, kernel_size= (3, 3), activation='relu')
-    self.flatten = tf.keras.Layers.Flatten()
+    self.flatten = tf.keras.layers.Flatten()
     self.dense = tf.keras.layers.Dense(6)
 
   def call(self, SAR_img):
@@ -51,6 +53,7 @@ class Decoder(tf.keras.Model):
 
 class Model(tf.keras.Model):
   def __init__(self):
+    super(Model,self).__init__()
     self.mdn = MDN()
     self.encoder = Encoder()
     self.decoder = Decoder()
@@ -65,9 +68,18 @@ path_SAR = 'S1_data'
 path_opt = 'S2_data'
 def get_data():
   for file1,file2 in zip(os.listdir(path_SAR),os.listdir(path_opt)):
-    SAR_img = np.load(os.path.join(path_SAR,file1))
-    opt_img = np.load(os.path.join(path_opt,file2))
-    yield SAR_img, opt_img
+    SAR_img = gdal.Open(os.path.join(path_SAR,file1))
+    band_SAR_img = SAR_img.GetRasterBand(1)
+    band_SAR_img = band_SAR_img.ReadAsArray()
+    opt_img = gdal.Open(os.path.join(path_opt,file2))
+    band_opt_img_R = opt_img.GetRasterBand(1)
+    band_opt_img_G = opt_img.GetRasterBand(2)
+    band_opt_img_B = opt_img.GetRasterBand(3)
+    band_opt_img_R = band_opt_img_R.ReadAsArray()
+    band_opt_img_G = band_opt_img_G.ReadAsArray()
+    band_opt_img_B = band_opt_img_B.ReadAsArray()
+    yield band_SAR_img, np.dstack((band_opt_img_R, band_opt_img_G, band_opt_img_B))
+  
   
 # write the training loop
 optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
@@ -80,7 +92,7 @@ for epoch in range(100):
   print("Epoch: {}".format(epoch))
   for step in range(num_steps):
     with tf.GradientTape() as tape:
-      SAR_img, opt_img = get_data()
+      SAR_img,opt_img = get_data().__next__()
       recon = model(SAR_img, opt_img)
       loss = loss_fn(recon, opt_img)
       gradients = tape.gradient(loss, model.trainable_variables)
