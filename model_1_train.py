@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import os
 import numpy as np
-import cv2
 from osgeo import gdal
 import sys
 from itertools import islice
@@ -33,7 +32,7 @@ class Encoder(tf.keras.Model):
     self.flatten = tf.keras.layers.Flatten()
     self.dense1 = tf.keras.layers.Dense(256, activation='relu')
     self.dense2 = tf.keras.layers.Dense(64, activation='relu')
-    self.dense3 = tf.keras.layers.Dense(16, activation='relu')
+    self.dense3 = tf.keras.layers.Dense(6, activation='relu')
 
   def call(self, inputs):
     x,rgb_dist = inputs
@@ -50,7 +49,7 @@ class Encoder(tf.keras.Model):
 class Decoder(tf.keras.Model):
   def __init__(self):
     super(Decoder,self).__init__()
-    self.dense1 = tf.keras.layers.Dense(64, activation='relu')
+    self.dense1 = tf.keras.layers.Dense(6, activation='relu')
     self.dense2 = tf.keras.layers.Dense(256, activation='relu')
     self.dense3 = tf.keras.layers.Dense(256*256*3, activation='sigmoid')
     self.reshape = tf.keras.layers.Reshape((256,256,1))
@@ -85,6 +84,7 @@ def get_data():
     SAR_img = gdal.Open(os.path.join(path_SAR,file1))
     band_SAR_img = SAR_img.GetRasterBand(1)
     band_SAR_img = band_SAR_img.ReadAsArray()
+    band_SAR_img = band_SAR_img.astype(np.uint8)
     opt_img = gdal.Open(os.path.join(path_opt,file2))
     band_opt_img_R = opt_img.GetRasterBand(1)
     band_opt_img_G = opt_img.GetRasterBand(2)
@@ -94,6 +94,7 @@ def get_data():
     band_opt_img_B = band_opt_img_B.ReadAsArray()
     img = np.dstack((band_opt_img_R, band_opt_img_G, band_opt_img_B))
     img = (img - img.min())/(img.max() - img.min())*255
+    #TODO : standardize the image
     img = img.astype(np.uint8)
     yield band_SAR_img, img
   
@@ -102,104 +103,79 @@ def get_data():
 # Create a dataset from your SAR and opt images
 data = tf.data.Dataset.from_generator(get_data, (tf.uint8, tf.uint8))
 
+
 # Define the number of steps per epoch and the number of total epochs
-num_steps = 10
-num_epochs = 1
+num_steps = 50
+num_epochs = 10
 model = Model()
 
 # Create an optimizer and a loss function
 optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 loss_fn = tf.keras.losses.MeanSquaredError()
-
+save_model_path = 'weight'
+cck_pnt = tf.train.Checkpoint(model=model, optimizer=optimizer)
+manager = tf.train.CheckpointManager(cck_pnt, './tf_ckpts', max_to_keep=3)
 # Iterate through the number of epochs
 for epoch in range(num_epochs):
     print("Epoch: {}".format(epoch))
     for step, (SAR_img, opt_img) in enumerate(data.take(num_steps)):
-        # plt.imshow(SAR_img)
-        # # show plot with title and axis labels
-        # plt.title('SAR image')
-        # plt.show()
-        # plt.imshow(opt_img)
-        # plt.title('opt image')
-        # print(opt_img)
-        plt.show()
         with tf.GradientTape() as tape:
-            # print(f'{SAR_img.shape:}')
-            # print(f'{opt_img.shape:}')
             recon = model(SAR_img, opt_img)
-            # print(f'{recon[0].shape:}')
             loss = loss_fn(opt_img, recon[0])
             gradients = tape.gradient(loss, model.trainable_variables)
             optimizer.apply_gradients(zip(gradients, model.trainable_variables))
             print("Step: {}, Loss: {}".format(step, loss.numpy()))
-            # print ssim value
-            # print("SSIM: {}".format(tf.image.ssim(opt_img, recon[0], max_val = 1)))
+        model.mdn.save_weights(os.path.join(save_model_path, 'mdn_weights.h5'))
+        model.decoder.save_weights(os.path.join(save_model_path, 'decoder.h5'))
 
 # save the weights
 model.save_weights('model_weights.h5')
-# save weights of MDN model
-model.mdn.save_weights('mdn_weights.h5')
-# save weights of decoder model
-model.decoder.save_weights('decoder_weights.h5')
-
 
 ############################################################################
 #                              Testing                                    #
 ############################################################################
 
+dummy_input_1 = np.zeros((256,256))
+dummy_input_2 = np.zeros(shape=(1,6))
+decoder = Decoder()
+decoder(dummy_input_2)
+decoder.load_weights(r'weight\decoder.h5')
+MDN = MDN()
+MDN(dummy_input_1)
+MDN.load_weights(r'weight\mdn_weights.h5')
 
-# create a dummy input
+SAR_img = os.listdir(path_SAR)[0]
+SAR_img = gdal.Open(os.path.join(path_SAR,SAR_img))
+band_SAR_img = SAR_img.GetRasterBand(1)
+band_SAR_img = band_SAR_img.ReadAsArray()
+band_SAR_img = band_SAR_img.astype(np.uint8)
+opt_img = os.listdir(path_opt)[0]
+opt_img = gdal.Open(os.path.join(path_opt,opt_img))
+band_opt_img_R = opt_img.GetRasterBand(1)
+band_opt_img_G = opt_img.GetRasterBand(2)
+band_opt_img_B = opt_img.GetRasterBand(3)
+band_opt_img_R = band_opt_img_R.ReadAsArray()
+band_opt_img_G = band_opt_img_G.ReadAsArray()
+band_opt_img_B = band_opt_img_B.ReadAsArray()
+img = np.dstack((band_opt_img_R, band_opt_img_G, band_opt_img_B))
+img = (img - img.min())/(img.max() - img.min())*255
+img = img.astype(np.uint8)
 
 
+rgb_dist = MDN(band_SAR_img)
+mu = tf.reduce_mean(rgb_dist, axis=0)
+sigma = tf.math.reduce_std(rgb_dist, axis=0)
 
+random_sample = mu+sigma* tf.random.normal(tf.shape(mu), mean=0., stddev=1., dtype=tf.float32)
+random_sample = tf.cast(random_sample, tf.uint8)
+random_sample = tf.reshape(random_sample, (1,6))
+recon = decoder(random_sample)
 
+mse_loss = tf.keras.losses.MeanSquaredError()
+loss = mse_loss(img, recon[0])
+print("loss of the model: {}".format(loss.numpy()))
 
-#create a dummy input
-dummy_input_1 = tf.zeros((256,256))
-dummy_input_2 = tf.zeros((256,256,3))
-
-#create an instance of the model
-model = Model()
-
-#call the model once to build the variables
-model(dummy_input_1, dummy_input_2)
-
-#load the weights
-model.load_weights('model_weights.h5')
-
-# Load the SAR image
-for file1,file2 in zip(os.listdir(path_SAR),os.listdir(path_opt)):
-  SAR_img = gdal.Open(os.path.join(path_SAR,file1))
-  band_SAR_img = SAR_img.GetRasterBand(1)
-  band_SAR_img = band_SAR_img.ReadAsArray()
-  opt_img = gdal.Open(os.path.join(path_opt,file2))
-  band_opt_img_R = opt_img.GetRasterBand(1)
-  band_opt_img_G = opt_img.GetRasterBand(2)
-  band_opt_img_B = opt_img.GetRasterBand(3)
-  band_opt_img_R = band_opt_img_R.ReadAsArray()
-  band_opt_img_G = band_opt_img_G.ReadAsArray()
-  band_opt_img_B = band_opt_img_B.ReadAsArray()
-  img = np.dstack((band_opt_img_R, band_opt_img_G, band_opt_img_B))
-  img = (img - img.min())/(img.max() - img.min())*255
-  img = img.astype(np.uint8)
-  break
-
-# Predict the output
-recon = model(band_SAR_img, img)
 plt.imshow(recon[0])
-print(recon[0])
-plt.show()
-
-# show mse score
-def mean_squared_error(img1, img2):
-  return np.mean((img1 - img2) ** 2)
-mse_score = mean_squared_error(band_SAR_img, recon[0])
-print(f'MSE score: {mse_score}')
-
-# show psnr score
-# psnr_score = peak_signal_noise_ratio(band_SAR_img, recon[0])
-# print(f'PSNR score: {psnr_score}')
-
 
 
 
