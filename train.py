@@ -14,7 +14,7 @@ def train_fn(disc, gen, loader, opt_disc, opt_gen, l1, bce, g_scaler, d_scaler):
     loop = tqdm(loader, leave = True)
 
     for idx, (x,y) in enumerate(loop):
-        x,y = x.view(16,1,256,256), y.view(16,3,256,256) 
+        x,y = x.view(2,1,256,256), y.view(2,3,256,256) 
         x, y = x.to(config.DEVICE), y.to(config.DEVICE)
 
         with torch.cuda.amp.autocast():

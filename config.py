@@ -8,7 +8,7 @@ TRAIN_DIR_Y = "SAR_data/train/S2"
 VAL_DIR_X = "SAR_data/train/S1"#TODO:It should be ideally diffrent for validation but for the time being I am keeping it same and will change it later
 VAL_DIR_Y = "SAR_data/train/S2"#TODO: SO that I don't forget to change one too.🤔
 LEARNING_RATE = 2e-4
-BATCH_SIZE = 16
+BATCH_SIZE = 2
 NUM_WORKERS = 2
 IMAGE_SIZE = 256
 CHANNELS_IMG = 3
@@ -38,4 +38,4 @@ transform_only_mask = A.Compose(
         A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], max_pixel_value=255.0,),
         ToTensorV2(),
     ]
-)
+)   
