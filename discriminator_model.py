@@ -42,8 +42,8 @@ class Discriminator(nn.Module):
         return self.model(x)
     
 def test():
-    x = torch.randn((1, 3, 286, 286))
-    y = torch.randn((1, 3, 286, 286))
+    x = torch.randn((1, 3, 256, 256))
+    y = torch.randn((1, 3, 256, 256))
     model = Discriminator()
     predictions = model(x,y)
     print(predictions.shape)

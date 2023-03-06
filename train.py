@@ -3,7 +3,7 @@ from utils import save_checkpoint, load_checkpoint, save_some_examples
 import torch.nn as nn
 import torch.optim as optim
 import config 
-from dataset import MapDataset
+from sar_dataset import MapDataset
 from generator_model import Generators
 from discriminator_model import Discriminator
 from torch.utils.data import DataLoader
@@ -43,7 +43,7 @@ def train_fn(disc, gen, loader, opt_disc, opt_gen, l1, bce, g_scaler, d_scaler):
 
 def main():
     disc = Discriminator(input_channel=3).to(config.DEVICE)
-    gen = Generators(in_channels=3).to(config.DEVICE)
+    gen = Generators(in_channels=1).to(config.DEVICE)
     opt_disc = optim.Adam(disc.parameters(), lr= config.LEARNING_RATE, betas=(0.5, 0.999))
     opt_gen = optim.Adam(gen.parameters(), lr= config.LEARNING_RATE, betas=(0.5, 0.999))
     BCE = nn.BCEWithLogitsLoss()
@@ -53,12 +53,12 @@ def main():
         load_checkpoint(config.CHECKPOINT_GEN, gen, opt_gen, config.LEARNING_RATE)
         load_checkpoint(config.CHECKPOINT_DISC, disc, opt_disc, config.LEARNING_RATE)
 
-    train_dataset = MapDataset(rootdir=r"data\maps\train")
+    train_dataset = MapDataset(x_dir=config.TRAIN_DIR_X, y_dir=config.TRAIN_DIR_Y)
     train_loader = DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle = True, num_workers=config.NUM_WORKERS)
 
     g_scaler = torch.cuda.amp.GradScaler()
     d_scaler = torch.cuda.amp.GradScaler()
-    val_dataset = MapDataset(rootdir=config.VAL_DIR)
+    val_dataset = MapDataset(x_dir=config.VAL_DIR_X,y_dir=config.VAL_DIR_Y)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False) 
 
     for epoch in range(config.NUM_EPOCHS):
