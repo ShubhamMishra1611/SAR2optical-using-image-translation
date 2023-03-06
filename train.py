@@ -9,11 +9,12 @@ from discriminator_model import Discriminator
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from torchvision.utils import save_image
-
+import sys
 def train_fn(disc, gen, loader, opt_disc, opt_gen, l1, bce, g_scaler, d_scaler):
     loop = tqdm(loader, leave = True)
 
     for idx, (x,y) in enumerate(loop):
+        x,y = x.view(16,1,256,256), y.view(16,3,256,256) 
         x, y = x.to(config.DEVICE), y.to(config.DEVICE)
 
         with torch.cuda.amp.autocast():
@@ -42,7 +43,7 @@ def train_fn(disc, gen, loader, opt_disc, opt_gen, l1, bce, g_scaler, d_scaler):
         g_scaler.update()
 
 def main():
-    disc = Discriminator(input_channel=3).to(config.DEVICE)
+    disc = Discriminator().to(config.DEVICE)
     gen = Generators(in_channels=1).to(config.DEVICE)
     opt_disc = optim.Adam(disc.parameters(), lr= config.LEARNING_RATE, betas=(0.5, 0.999))
     opt_gen = optim.Adam(gen.parameters(), lr= config.LEARNING_RATE, betas=(0.5, 0.999))

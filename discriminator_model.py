@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import sys
 
 class CNN_block(nn.Module):
     def __init__(self, input_channel, output_channel, stride = 2):
@@ -15,7 +16,7 @@ class CNN_block(nn.Module):
     
 
 class Discriminator(nn.Module):
-    def __init__(self, input_channel = 3, features = [64, 128, 256, 512]) -> None:
+    def __init__(self, input_channel = 2, features = [64, 128, 256, 512]) -> None:
         super().__init__()
         self.initial_block = nn.Sequential(
             nn.Conv2d(
@@ -38,12 +39,13 @@ class Discriminator(nn.Module):
 
     def forward(self, x, y):
         x = torch.cat([x, y], dim=1) # along the channel
+        x = x.float()
         x = self.initial_block(x)
         return self.model(x)
     
 def test():
     x = torch.randn((1, 3, 256, 256))
-    y = torch.randn((1, 3, 256, 256))
+    y = torch.randn((1, 1, 256, 256))
     model = Discriminator()
     predictions = model(x,y)
     print(predictions.shape)

@@ -18,7 +18,7 @@ class block(nn.Module):
     
 
 class Generators(nn.Module):
-    def __init__(self, in_channels=3, features = 64, output_channel = 3) -> None:
+    def __init__(self, in_channels=1, features = 64, output_channel = 3) -> None:
         super().__init__()
         self.initial_block = nn.Sequential(
             nn.Conv2d(in_channels, features, 4, 2, 1, padding_mode="reflect"),
@@ -50,6 +50,7 @@ class Generators(nn.Module):
         )
 
     def forward(self, x):
+        x = x.float()
         d1 = self.initial_block(x)
         d2 = self.down1(d1)
         d3 = self.down2(d2)
@@ -73,6 +74,7 @@ def test():
     x = torch.randn((1,1,256,256))
     model = Generators(in_channels=1, features=64, output_channel=3)
     preds = model(x)
+    print("Output shape ", end=":")
     print(preds.shape)
 
 
